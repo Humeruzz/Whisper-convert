@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from convert import format_timestamp, write_transcript, transcribe
+from convert import format_timestamp, write_transcript, transcribe, load_model
 
 
 def test_format_timestamp_zero():
@@ -89,3 +89,21 @@ def test_transcribe_empty_file():
     result = transcribe(model, "silent.mp4")
 
     assert result == []
+
+
+def test_load_model_returns_whisper_instance():
+    with patch("convert.WhisperModel") as MockModel:
+        mock_instance = MagicMock()
+        MockModel.return_value = mock_instance
+
+        result = load_model()
+
+        assert result is mock_instance
+
+
+def test_load_model_uses_env_config():
+    with patch("convert.WhisperModel") as MockModel:
+        with patch("convert.MODEL_SIZE", "base"):
+            with patch("convert.COMPUTE_TYPE", "float16"):
+                load_model()
+                MockModel.assert_called_once_with("base", device="cpu", compute_type="float16")

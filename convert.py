@@ -34,3 +34,10 @@ def transcribe(model: WhisperModel, input_path: str) -> list[tuple[float, str]]:
         vad_parameters={"min_silence_duration_ms": 500},
     )
     return [(seg.start, seg.text.strip()) for seg in segments]
+
+
+def load_model() -> WhisperModel:
+    print(f"Loading Whisper model ({MODEL_SIZE})...", end="", flush=True)
+    model = WhisperModel(MODEL_SIZE, device="cpu", compute_type=COMPUTE_TYPE)
+    print(" done")
+    return model
