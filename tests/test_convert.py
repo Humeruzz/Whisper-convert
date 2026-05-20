@@ -41,15 +41,13 @@ def test_write_transcript_empty(tmp_path):
 
 
 def test_transcribe_returns_segments():
-    seg1 = MagicMock()
-    seg1.start = 1.0
-    seg1.text = "  Hello  "
-    seg2 = MagicMock()
-    seg2.start = 5.5
-    seg2.text = "World"
-
     model = MagicMock()
-    model.transcribe.return_value = ([seg1, seg2], MagicMock())
+    model.transcribe.return_value = {
+        "segments": [
+            {"start": 1.0, "text": "  Hello  "},
+            {"start": 5.5, "text": "World"},
+        ]
+    }
 
     result = transcribe(model, "fake.mp4")
 
@@ -57,12 +55,10 @@ def test_transcribe_returns_segments():
 
 
 def test_transcribe_strips_whitespace():
-    seg = MagicMock()
-    seg.start = 0.0
-    seg.text = "   padded text   "
-
     model = MagicMock()
-    model.transcribe.return_value = ([seg], MagicMock())
+    model.transcribe.return_value = {
+        "segments": [{"start": 0.0, "text": "   padded text   "}]
+    }
 
     result = transcribe(model, "fake.mp4")
 
@@ -71,20 +67,19 @@ def test_transcribe_strips_whitespace():
 
 def test_transcribe_calls_model_with_correct_params():
     model = MagicMock()
-    model.transcribe.return_value = ([], MagicMock())
+    model.transcribe.return_value = {"segments": []}
 
     transcribe(model, "video.mp4")
 
     call_kwargs = model.transcribe.call_args
     assert call_kwargs[0][0] == "video.mp4"
     assert call_kwargs[1]["beam_size"] == 5
-    assert call_kwargs[1]["vad_filter"] is True
-    assert call_kwargs[1]["vad_parameters"] == {"min_silence_duration_ms": 500}
+    assert call_kwargs[1]["fp16"] is True
 
 
 def test_transcribe_empty_file():
     model = MagicMock()
-    model.transcribe.return_value = ([], MagicMock())
+    model.transcribe.return_value = {"segments": []}
 
     result = transcribe(model, "silent.mp4")
 
@@ -92,9 +87,9 @@ def test_transcribe_empty_file():
 
 
 def test_load_model_returns_whisper_instance():
-    with patch("convert.WhisperModel") as MockModel:
+    with patch("convert.whisper.load_model") as mock_load:
         mock_instance = MagicMock()
-        MockModel.return_value = mock_instance
+        mock_load.return_value = mock_instance
 
         result = load_model()
 
@@ -102,11 +97,10 @@ def test_load_model_returns_whisper_instance():
 
 
 def test_load_model_uses_env_config():
-    with patch("convert.WhisperModel") as MockModel:
+    with patch("convert.whisper.load_model") as mock_load:
         with patch("convert.MODEL_SIZE", "base"):
-            with patch("convert.COMPUTE_TYPE", "float16"):
-                load_model()
-                MockModel.assert_called_once_with("base", device="cpu", compute_type="float16")
+            load_model()
+            mock_load.assert_called_once_with("base", device="cuda")
 
 
 def test_main_file_not_found(capsys):
@@ -123,7 +117,7 @@ def test_main_default_output_path(tmp_path):
     fake_mp4.write_bytes(b"fake-data")
 
     mock_model = MagicMock()
-    mock_model.transcribe.return_value = ([], MagicMock())
+    mock_model.transcribe.return_value = {"segments": []}
 
     with patch("sys.argv", ["convert.py", str(fake_mp4)]):
         with patch("convert.load_model", return_value=mock_model):
@@ -139,7 +133,7 @@ def test_main_custom_output_path(tmp_path):
     custom_out = tmp_path / "notes.txt"
 
     mock_model = MagicMock()
-    mock_model.transcribe.return_value = ([], MagicMock())
+    mock_model.transcribe.return_value = {"segments": []}
 
     with patch("sys.argv", ["convert.py", str(fake_mp4), "-o", str(custom_out)]):
         with patch("convert.load_model", return_value=mock_model):
@@ -153,11 +147,13 @@ def test_main_writes_segments_to_file(tmp_path):
     fake_mp4 = tmp_path / "video.mp4"
     fake_mp4.write_bytes(b"fake-data")
 
-    seg1 = MagicMock(); seg1.start = 3.0; seg1.text = "Hello"
-    seg2 = MagicMock(); seg2.start = 120.0; seg2.text = "World"
-
     mock_model = MagicMock()
-    mock_model.transcribe.return_value = ([seg1, seg2], MagicMock())
+    mock_model.transcribe.return_value = {
+        "segments": [
+            {"start": 3.0, "text": "Hello"},
+            {"start": 120.0, "text": "World"},
+        ]
+    }
 
     with patch("sys.argv", ["convert.py", str(fake_mp4)]):
         with patch("convert.load_model", return_value=mock_model):

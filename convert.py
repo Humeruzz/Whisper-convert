@@ -2,13 +2,12 @@ import argparse
 import os
 from pathlib import Path
 
+import whisper
 from dotenv import load_dotenv
-from faster_whisper import WhisperModel
 
 load_dotenv()
 
 MODEL_SIZE = os.getenv("MODEL_SIZE", "small")
-COMPUTE_TYPE = os.getenv("COMPUTE_TYPE", "int8")
 LANGUAGE = os.getenv("WHISPER_LANGUAGE") or None
 
 
@@ -25,20 +24,21 @@ def write_transcript(segments: list[tuple[float, str]], output_path: str) -> Non
             f.write(f"[{format_timestamp(start)}] {text}\n")
 
 
-def transcribe(model: WhisperModel, input_path: str) -> list[tuple[float, str]]:
-    segments, _ = model.transcribe(
+def transcribe(model, input_path: str) -> list[tuple[float, str]]:
+    result = model.transcribe(
         input_path,
         language=LANGUAGE,
         beam_size=5,
-        vad_filter=True,
-        vad_parameters={"min_silence_duration_ms": 500},
+        fp16=True,
+        condition_on_previous_text=False,
+        no_speech_threshold=0.6,
     )
-    return [(seg.start, seg.text.strip()) for seg in segments]
+    return [(seg["start"], seg["text"].strip()) for seg in result["segments"]]
 
 
-def load_model() -> WhisperModel:
+def load_model():
     print(f"Loading Whisper model ({MODEL_SIZE})...", end="", flush=True)
-    model = WhisperModel(MODEL_SIZE, device="cpu", compute_type=COMPUTE_TYPE)
+    model = whisper.load_model(MODEL_SIZE, device="cuda")
     print(" done")
     return model
 
