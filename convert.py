@@ -17,3 +17,9 @@ def format_timestamp(seconds: float) -> str:
     m = int((seconds % 3600) // 60)
     s = int(seconds % 60)
     return f"{h:02d}:{m:02d}:{s:02d}"
+
+
+def write_transcript(segments: list[tuple[float, str]], output_path: str) -> None:
+    with open(output_path, "w", encoding="utf-8") as f:
+        for start, text in segments:
+            f.write(f"[{format_timestamp(start)}] {text}\n")
