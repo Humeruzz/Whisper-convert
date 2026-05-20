@@ -95,3 +95,34 @@ def format_file(input_path: str, output_path: str, mode: str) -> int:
     Path(output_path).write_text(result, encoding="utf-8")
     print(f"Saved to {output_path}")
     return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Format or summarize a transcript using a local LM Studio model"
+    )
+    parser.add_argument("input", help="Path to input .txt transcript")
+    parser.add_argument(
+        "-o", "--output",
+        help="Output .txt path (default: <input stem>_formatted.txt)",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["format", "summarize"],
+        default=os.getenv("LLM_MODE", "format"),
+        help="format = cleanup filler words; summarize = condense to key points (default: format)",
+    )
+    args = parser.parse_args()
+
+    if not os.path.isfile(args.input):
+        print(f"Error: '{args.input}' not found")
+        return 1
+
+    p = Path(args.input)
+    output_path = args.output or str(p.parent / f"{p.stem}_formatted{p.suffix}")
+
+    return format_file(args.input, output_path, mode=args.mode)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

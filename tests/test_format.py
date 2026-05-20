@@ -3,7 +3,7 @@ import pytest
 import urllib.error
 from unittest.mock import MagicMock, patch, mock_open
 
-from format import call_llm, format_file
+from format import call_llm, format_file, main
 
 
 def test_call_llm_returns_cleaned_text():
@@ -121,3 +121,50 @@ def test_format_file_llm_error_prints_and_exits(tmp_path, capsys):
 
     assert result == 1
     assert "unavailable" in capsys.readouterr().out.lower()
+
+
+def test_main_input_not_found(capsys):
+    with patch("sys.argv", ["format.py", "nonexistent.txt"]):
+        result = main()
+
+    assert result == 1
+    assert "not found" in capsys.readouterr().out
+
+
+def test_main_default_output_path(tmp_path):
+    input_file = tmp_path / "transcript.txt"
+    input_file.write_text("raw text", encoding="utf-8")
+
+    with patch("sys.argv", ["format.py", str(input_file)]):
+        with patch("format.format_file", return_value=0) as mock_ff:
+            main()
+
+    expected_output = str(tmp_path / "transcript_formatted.txt")
+    mock_ff.assert_called_once_with(str(input_file), expected_output, mode="format")
+
+
+def test_main_custom_output_path(tmp_path):
+    input_file = tmp_path / "transcript.txt"
+    input_file.write_text("raw text", encoding="utf-8")
+    custom_out = str(tmp_path / "clean.txt")
+
+    with patch("sys.argv", ["format.py", str(input_file), "-o", custom_out]):
+        with patch("format.format_file", return_value=0) as mock_ff:
+            main()
+
+    mock_ff.assert_called_once_with(str(input_file), custom_out, mode="format")
+
+
+def test_main_mode_flag(tmp_path):
+    input_file = tmp_path / "transcript.txt"
+    input_file.write_text("raw text", encoding="utf-8")
+
+    with patch("sys.argv", ["format.py", str(input_file), "--mode", "summarize"]):
+        with patch("format.format_file", return_value=0) as mock_ff:
+            main()
+
+    mock_ff.assert_called_once_with(
+        str(input_file),
+        str(tmp_path / "transcript_formatted.txt"),
+        mode="summarize",
+    )
