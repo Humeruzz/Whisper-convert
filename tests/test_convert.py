@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from convert import format_timestamp, write_transcript, transcribe, load_model
+from convert import format_timestamp, write_transcript, transcribe, load_model, main
 
 
 def test_format_timestamp_zero():
@@ -107,3 +107,62 @@ def test_load_model_uses_env_config():
             with patch("convert.COMPUTE_TYPE", "float16"):
                 load_model()
                 MockModel.assert_called_once_with("base", device="cpu", compute_type="float16")
+
+
+def test_main_file_not_found(capsys):
+    with patch("sys.argv", ["convert.py", "nonexistent.mp4"]):
+        result = main()
+
+    assert result == 1
+    captured = capsys.readouterr()
+    assert "not found" in captured.out
+
+
+def test_main_default_output_path(tmp_path):
+    fake_mp4 = tmp_path / "lecture.mp4"
+    fake_mp4.write_bytes(b"fake-data")
+
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = ([], MagicMock())
+
+    with patch("sys.argv", ["convert.py", str(fake_mp4)]):
+        with patch("convert.load_model", return_value=mock_model):
+            result = main()
+
+    assert result == 0
+    assert (tmp_path / "lecture.txt").exists()
+
+
+def test_main_custom_output_path(tmp_path):
+    fake_mp4 = tmp_path / "lecture.mp4"
+    fake_mp4.write_bytes(b"fake-data")
+    custom_out = tmp_path / "notes.txt"
+
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = ([], MagicMock())
+
+    with patch("sys.argv", ["convert.py", str(fake_mp4), "-o", str(custom_out)]):
+        with patch("convert.load_model", return_value=mock_model):
+            result = main()
+
+    assert result == 0
+    assert custom_out.exists()
+
+
+def test_main_writes_segments_to_file(tmp_path):
+    fake_mp4 = tmp_path / "video.mp4"
+    fake_mp4.write_bytes(b"fake-data")
+
+    seg1 = MagicMock(); seg1.start = 3.0; seg1.text = "Hello"
+    seg2 = MagicMock(); seg2.start = 120.0; seg2.text = "World"
+
+    mock_model = MagicMock()
+    mock_model.transcribe.return_value = ([seg1, seg2], MagicMock())
+
+    with patch("sys.argv", ["convert.py", str(fake_mp4)]):
+        with patch("convert.load_model", return_value=mock_model):
+            main()
+
+    lines = (tmp_path / "video.txt").read_text(encoding="utf-8").splitlines()
+    assert lines[0] == "[00:00:03] Hello"
+    assert lines[1] == "[00:02:00] World"
