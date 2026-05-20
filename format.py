@@ -73,3 +73,25 @@ def call_llm(text: str, mode: str) -> str:
         body = json.loads(resp.read().decode("utf-8"))
 
     return body["choices"][0]["message"]["content"].strip()
+
+
+def format_file(input_path: str, output_path: str, mode: str) -> int:
+    """Read input file, send to LLM, write result. Returns 0 on success, 1 on error."""
+    text = Path(input_path).read_text(encoding="utf-8")
+    print(f"Sending to LM Studio (mode={mode}, {len(text)} chars)...")
+
+    try:
+        result = call_llm(text, mode=mode)
+    except urllib.error.URLError as e:
+        print(f"Error: LM Studio unavailable ({e.reason}). Is it running at {LLM_BASE_URL}?")
+        return 1
+    except TimeoutError:
+        print(f"Error: LM Studio timed out after {LLM_TIMEOUT}s. Try increasing LLM_TIMEOUT in .env.")
+        return 1
+    except (KeyError, IndexError, json.JSONDecodeError) as e:
+        print(f"Error: Unexpected response from LM Studio ({e}).")
+        return 1
+
+    Path(output_path).write_text(result, encoding="utf-8")
+    print(f"Saved to {output_path}")
+    return 0

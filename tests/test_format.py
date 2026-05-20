@@ -3,7 +3,7 @@ import pytest
 import urllib.error
 from unittest.mock import MagicMock, patch, mock_open
 
-from format import call_llm
+from format import call_llm, format_file
 
 
 def test_call_llm_returns_cleaned_text():
@@ -88,3 +88,36 @@ def test_call_llm_wraps_text_in_transcription_tags():
     user_msg = payload["messages"][1]["content"]
     assert "<transcription>" in user_msg
     assert "my text" in user_msg
+
+
+def test_format_file_reads_input_and_writes_output(tmp_path):
+    input_file = tmp_path / "in.txt"
+    input_file.write_text("[00:00:01] Hello um world.\n[00:00:05] Goodbye.\n", encoding="utf-8")
+    output_file = tmp_path / "out.txt"
+
+    with patch("format.call_llm", return_value="Hello world.\nGoodbye."):
+        format_file(str(input_file), str(output_file), mode="format")
+
+    assert output_file.read_text(encoding="utf-8") == "Hello world.\nGoodbye."
+
+
+def test_format_file_passes_full_content_to_llm(tmp_path):
+    input_file = tmp_path / "in.txt"
+    content = "[00:00:01] Some text.\n[00:00:05] More text.\n"
+    input_file.write_text(content, encoding="utf-8")
+
+    with patch("format.call_llm", return_value="cleaned") as mock_llm:
+        format_file(str(input_file), str(tmp_path / "out.txt"), mode="format")
+
+    mock_llm.assert_called_once_with(content, mode="format")
+
+
+def test_format_file_llm_error_prints_and_exits(tmp_path, capsys):
+    input_file = tmp_path / "in.txt"
+    input_file.write_text("text", encoding="utf-8")
+
+    with patch("format.call_llm", side_effect=urllib.error.URLError("connection refused")):
+        result = format_file(str(input_file), str(tmp_path / "out.txt"), mode="format")
+
+    assert result == 1
+    assert "unavailable" in capsys.readouterr().out.lower()
