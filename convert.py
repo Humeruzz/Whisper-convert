@@ -23,3 +23,14 @@ def write_transcript(segments: list[tuple[float, str]], output_path: str) -> Non
     with open(output_path, "w", encoding="utf-8") as f:
         for start, text in segments:
             f.write(f"[{format_timestamp(start)}] {text}\n")
+
+
+def transcribe(model: WhisperModel, input_path: str) -> list[tuple[float, str]]:
+    segments, _ = model.transcribe(
+        input_path,
+        language=LANGUAGE,
+        beam_size=5,
+        vad_filter=True,
+        vad_parameters={"min_silence_duration_ms": 500},
+    )
+    return [(seg.start, seg.text.strip()) for seg in segments]
